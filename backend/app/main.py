@@ -7,6 +7,11 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import init_db, close_db
 from app.core.logging_config import setup_logging
+from app.core.middleware import (
+    ErrorHandlingMiddleware,
+    RequestLoggingMiddleware,
+    CORSHeadersMiddleware,
+)
 from app.api import courses, quizzes, transcripts, teacher_hints
 
 logger = logging.getLogger(__name__)
@@ -38,6 +43,11 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# 註冊中間件（注意順序：後註冊的先執行）
+app.add_middleware(ErrorHandlingMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(CORSHeadersMiddleware)
 
 # CORS 中間件設定
 app.add_middleware(

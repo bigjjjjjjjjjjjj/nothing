@@ -19,6 +19,8 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
   const [teacherHints, setTeacherHints] = useState<TeacherHint[]>([]);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
 
   const audioCaptureRef = useRef<AudioCapture | null>(null);
 
@@ -31,6 +33,9 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
 
   const initializeCourse = async () => {
     try {
+      setIsLoading(true);
+      setLoadingMessage('正在初始化課程...');
+
       const result = await apiClient.createCourse({
         meetingId: meetingId!,
         meetingUrl: window.location.href,
@@ -40,8 +45,13 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
 
       setCourseId(result.courseId);
       console.log('CourseAI: Course created:', result.courseId);
+      setError(null);
     } catch (error) {
       console.error('Failed to create course:', error);
+      setError('無法初始化課程，請重新整理頁面');
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -146,14 +156,27 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
     if (!file || !courseId) return;
 
     try {
+      setIsLoading(true);
+      setLoadingMessage(`正在上傳 ${file.name}...`);
+      setError(null);
+
       console.log('CourseAI: Uploading file:', file.name);
       const result = await apiClient.uploadSlides(courseId, file);
       setUploadedFile(file);
       console.log('CourseAI: File uploaded:', result);
-      alert(`檔案上傳成功！${result.pages} 頁`);
+      setLoadingMessage(`上傳成功！共 ${result.pages} 頁`);
+
+      // 2秒後清除成功訊息
+      setTimeout(() => {
+        if (loadingMessage.includes('成功')) {
+          setLoadingMessage('');
+        }
+      }, 2000);
     } catch (error) {
       console.error('Failed to upload file:', error);
-      alert('檔案上傳失敗');
+      setError(error instanceof Error ? error.message : '檔案上傳失敗');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -162,14 +185,22 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
     if (!courseId) return;
 
     try {
+      setIsLoading(true);
+      setLoadingMessage('正在分析課程內容...');
+      setError(null);
+
       console.log('CourseAI: Generating summary');
       const result = await apiClient.analyzeCourse(courseId);
       console.log('CourseAI: Summary generated:', result);
-      alert('課程重點已生成！');
+      setLoadingMessage('課程重點已生成！');
+
+      setTimeout(() => setLoadingMessage(''), 2000);
       // TODO: 顯示摘要內容
     } catch (error) {
       console.error('Failed to generate summary:', error);
-      alert('生成重點失敗');
+      setError(error instanceof Error ? error.message : '生成重點失敗');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -178,9 +209,15 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
     if (!courseId) return;
 
     try {
+      setIsLoading(true);
+      setLoadingMessage('正在建議題目範圍...');
+      setError(null);
+
       console.log('CourseAI: Generating quiz');
       const scopes = await apiClient.suggestQuizScopes(courseId);
       console.log('CourseAI: Quiz scopes:', scopes);
+
+      setLoadingMessage('正在生成題目...');
 
       // 使用第一個範圍生成題目
       const quiz = await apiClient.generateQuiz({
@@ -195,11 +232,15 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
       });
 
       console.log('CourseAI: Quiz generated:', quiz);
-      alert(`題目已生成！共 ${quiz.questions.length} 題`);
+      setLoadingMessage(`題目已生成！共 ${quiz.questions.length} 題`);
+
+      setTimeout(() => setLoadingMessage(''), 3000);
       // TODO: 開啟 Popup 顯示題目
     } catch (error) {
       console.error('Failed to generate quiz:', error);
-      alert('生成試題失敗');
+      setError(error instanceof Error ? error.message : '生成試題失敗');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -231,6 +272,14 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
       </div>
 
       <div className="courseai-content">
+        {/* 加載狀態 */}
+        {isLoading && (
+          <div className="courseai-loading">
+            <div className="loading-spinner"></div>
+            <p>{loadingMessage || '處理中...'}</p>
+          </div>
+        )}
+
         {/* 上傳講義 */}
         <section className="courseai-section">
           <h4>上傳講義</h4>
@@ -239,6 +288,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
             accept=".pdf,.ppt,.pptx,.doc,.docx"
             onChange={handleFileUpload}
             className="courseai-file-input"
+            disabled={isLoading}
           />
           {uploadedFile && (
             <p className="courseai-file-name">{uploadedFile.name}</p>
@@ -311,10 +361,18 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
         {/* 課後功能 */}
         <section className="courseai-section">
           <h4>課後功能</h4>
-          <button className="courseai-btn" onClick={generateSummary}>
+          <button
+            className="courseai-btn"
+            onClick={generateSummary}
+            disabled={isLoading || !courseId}
+          >
             生成課程重點
           </button>
-          <button className="courseai-btn" onClick={generateQuiz}>
+          <button
+            className="courseai-btn"
+            onClick={generateQuiz}
+            disabled={isLoading || !courseId}
+          >
             生成試題
           </button>
         </section>
