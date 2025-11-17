@@ -1,0 +1,257 @@
+/**
+ * CourseAI 側邊欄樣式
+ */
+
+.courseai-sidebar-container {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 9999;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.courseai-sidebar {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+}
+
+.courseai-sidebar.collapsed {
+  width: 50px;
+  height: 50px;
+}
+
+.courseai-sidebar.open {
+  width: 380px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.courseai-toggle-btn {
+  width: 50px;
+  height: 50px;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4);
+  transition: transform 0.2s;
+}
+
+.courseai-toggle-btn:hover {
+  transform: scale(1.1);
+}
+
+.courseai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.courseai-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.courseai-close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.courseai-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.courseai-content {
+  padding: 16px;
+}
+
+.courseai-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.courseai-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.courseai-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.courseai-btn {
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin-bottom: 8px;
+}
+
+.courseai-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.courseai-btn.recording {
+  background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.courseai-file-input {
+  width: 100%;
+  padding: 8px;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.courseai-file-input:hover {
+  border-color: #667eea;
+}
+
+.courseai-file-name {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #059669;
+  font-weight: 500;
+}
+
+.courseai-transcripts {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.courseai-empty {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+  padding: 20px;
+}
+
+.courseai-transcript-item {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.courseai-transcript-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.transcript-time {
+  display: inline-block;
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.transcript-text {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.courseai-hints {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.courseai-hint-item {
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.hint-icon {
+  margin-right: 6px;
+}
+
+.hint-time {
+  color: #92400e;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.hint-text {
+  margin: 4px 0 0 0;
+  color: #78350f;
+  line-height: 1.4;
+}
+
+/* 滾動條樣式 */
+.courseai-transcripts::-webkit-scrollbar,
+.courseai-hints::-webkit-scrollbar,
+.courseai-sidebar.open::-webkit-scrollbar {
+  width: 6px;
+}
+
+.courseai-transcripts::-webkit-scrollbar-track,
+.courseai-hints::-webkit-scrollbar-track,
+.courseai-sidebar.open::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.courseai-transcripts::-webkit-scrollbar-thumb,
+.courseai-hints::-webkit-scrollbar-thumb,
+.courseai-sidebar.open::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.courseai-transcripts::-webkit-scrollbar-thumb:hover,
+.courseai-hints::-webkit-scrollbar-thumb:hover,
+.courseai-sidebar.open::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
