@@ -1,8 +1,9 @@
 /**
  * 側邊欄 UI 元件
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../shared/api';
+import { AudioCapture, createAudioCapture } from './audioCapture';
 import type { TranscriptItem, TeacherHint } from '../shared/types';
 
 interface SidebarProps {
@@ -14,8 +15,12 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
   const [courseId, setCourseId] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const [teacherHints, setTeacherHints] = useState<TeacherHint[]>([]);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const audioCaptureRef = useRef<AudioCapture | null>(null);
 
   // 初始化：建立課程
   useEffect(() => {
@@ -40,6 +45,15 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
     }
   };
 
+  // 清理資源
+  useEffect(() => {
+    return () => {
+      if (audioCaptureRef.current) {
+        audioCaptureRef.current.stopCapture();
+      }
+    };
+  }, []);
+
   // 開始/停止錄音
   const toggleRecording = () => {
     if (isRecording) {
@@ -49,21 +63,81 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
     }
   };
 
-  const startRecording = () => {
-    if (!courseId) return;
+  const startRecording = async () => {
+    if (!courseId) {
+      setError('請先等待課程初始化');
+      return;
+    }
 
-    console.log('CourseAI: Starting recording');
-    setIsRecording(true);
+    try {
+      console.log('CourseAI: Starting recording');
+      setError(null);
 
-    // TODO: 實作音訊擷取和 WebSocket 連線
-    // 這裡需要整合 audioCapture.ts
+      // 建立 AudioCapture 實例
+      const wsUrl = 'ws://localhost:8000/api/v1/transcripts/ws';
+
+      audioCaptureRef.current = createAudioCapture({
+        courseId,
+        wsUrl,
+        onTranscript: (transcript: TranscriptItem) => {
+          console.log('CourseAI: Received transcript:', transcript);
+          setTranscripts((prev) => {
+            // 如果是最終結果，替換暫時的結果
+            if (transcript.isFinal) {
+              const filtered = prev.filter((t) => t.isFinal || t.timestamp !== transcript.timestamp);
+              return [...filtered, transcript];
+            }
+            // 暫時結果：更新或添加
+            const existingIndex = prev.findIndex((t) => !t.isFinal && t.timestamp === transcript.timestamp);
+            if (existingIndex !== -1) {
+              const updated = [...prev];
+              updated[existingIndex] = transcript;
+              return updated;
+            }
+            return [...prev, transcript];
+          });
+        },
+        onError: (error: Error) => {
+          console.error('CourseAI: Audio capture error:', error);
+          setError(error.message);
+          setIsRecording(false);
+        },
+        onConnectionChange: (connected: boolean) => {
+          console.log('CourseAI: Connection status:', connected);
+          setIsConnected(connected);
+        },
+      });
+
+      await audioCaptureRef.current.startCapture();
+      setIsRecording(true);
+      console.log('CourseAI: Recording started successfully');
+    } catch (error) {
+      console.error('CourseAI: Failed to start recording:', error);
+      setError(error instanceof Error ? error.message : '無法開始錄音');
+      setIsRecording(false);
+    }
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
     console.log('CourseAI: Stopping recording');
-    setIsRecording(false);
 
-    // TODO: 停止音訊擷取和關閉 WebSocket
+    if (audioCaptureRef.current) {
+      await audioCaptureRef.current.stopCapture();
+      audioCaptureRef.current = null;
+    }
+
+    setIsRecording(false);
+    setIsConnected(false);
+
+    // 結束課程
+    if (courseId) {
+      try {
+        await apiClient.endCourse(courseId);
+        console.log('CourseAI: Course ended');
+      } catch (error) {
+        console.error('Failed to end course:', error);
+      }
+    }
   };
 
   // 處理檔案上傳
@@ -137,7 +211,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
           onClick={() => setIsOpen(true)}
           title="展開 CourseAI"
         >
-          📚
+          CourseAI
         </button>
       </div>
     );
@@ -146,7 +220,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
   return (
     <div className="courseai-sidebar open">
       <div className="courseai-header">
-        <h3>CourseAI 🎓</h3>
+        <h3>CourseAI</h3>
         <button
           className="courseai-close-btn"
           onClick={() => setIsOpen(false)}
@@ -159,7 +233,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
       <div className="courseai-content">
         {/* 上傳講義 */}
         <section className="courseai-section">
-          <h4>📁 上傳講義</h4>
+          <h4>上傳講義</h4>
           <input
             type="file"
             accept=".pdf,.ppt,.pptx,.doc,.docx"
@@ -167,30 +241,51 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
             className="courseai-file-input"
           />
           {uploadedFile && (
-            <p className="courseai-file-name">✓ {uploadedFile.name}</p>
+            <p className="courseai-file-name">{uploadedFile.name}</p>
           )}
         </section>
 
         {/* 即時轉錄 */}
         <section className="courseai-section">
-          <h4>🎤 即時轉錄</h4>
-          <button
-            className={`courseai-btn ${isRecording ? 'recording' : ''}`}
-            onClick={toggleRecording}
-          >
-            {isRecording ? '⏸ 暫停錄音' : '▶️ 開始錄音'}
-          </button>
+          <h4>即時轉錄</h4>
+
+          {error && (
+            <div className="courseai-error">
+              {error}
+            </div>
+          )}
+
+          <div className="courseai-recording-status">
+            <button
+              className={`courseai-btn ${isRecording ? 'recording' : ''}`}
+              onClick={toggleRecording}
+              disabled={!courseId}
+            >
+              {isRecording ? '停止錄音' : '開始錄音'}
+            </button>
+
+            {isRecording && (
+              <span className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
+                {isConnected ? '● 已連線' : '○ 連線中...'}
+              </span>
+            )}
+          </div>
 
           <div className="courseai-transcripts">
             {transcripts.length === 0 ? (
               <p className="courseai-empty">點擊「開始錄音」開始轉錄</p>
             ) : (
-              transcripts.map((item, index) => (
-                <div key={index} className="courseai-transcript-item">
-                  <span className="transcript-time">[{item.timestamp}]</span>
-                  <p className="transcript-text">{item.text}</p>
-                </div>
-              ))
+              transcripts
+                .filter((item) => item.isFinal)
+                .map((item, index) => (
+                  <div key={index} className="courseai-transcript-item">
+                    <span className="transcript-time">[{item.timestamp}]</span>
+                    <p className="transcript-text">{item.text}</p>
+                    <span className="transcript-confidence">
+                      {(item.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ))
             )}
           </div>
         </section>
@@ -198,12 +293,12 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
         {/* 老師重點提示 */}
         {teacherHints.length > 0 && (
           <section className="courseai-section">
-            <h4>🎯 重點提示 ({teacherHints.length})</h4>
+            <h4>重點提示 ({teacherHints.length})</h4>
             <div className="courseai-hints">
               {teacherHints.map((hint) => (
                 <div key={hint.id} className="courseai-hint-item">
                   <span className="hint-icon">
-                    {hint.hintType === 'exam' ? '⭐' : '⚠️'}
+                    {hint.hintType === 'exam' ? '[重要]' : '[注意]'}
                   </span>
                   <span className="hint-time">[{hint.timestamp}]</span>
                   <p className="hint-text">{hint.hintText}</p>
@@ -215,7 +310,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
 
         {/* 課後功能 */}
         <section className="courseai-section">
-          <h4>📝 課後功能</h4>
+          <h4>課後功能</h4>
           <button className="courseai-btn" onClick={generateSummary}>
             生成課程重點
           </button>

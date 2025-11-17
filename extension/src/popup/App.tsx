@@ -20,7 +20,7 @@ const App: React.FC = () => {
   return (
     <div className="popup-container">
       <header className="popup-header">
-        <h1>CourseAI 🎓</h1>
+        <h1>CourseAI</h1>
         <p className="popup-subtitle">智慧學習助理</p>
       </header>
 
@@ -29,19 +29,19 @@ const App: React.FC = () => {
           className={`nav-btn ${activeTab === 'courses' ? 'active' : ''}`}
           onClick={() => setActiveTab('courses')}
         >
-          📚 課程列表
+          課程列表
         </button>
         <button
           className={`nav-btn ${activeTab === 'quizzes' ? 'active' : ''}`}
           onClick={() => setActiveTab('quizzes')}
         >
-          📝 題目練習
+          題目練習
         </button>
         <button
           className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => setActiveTab('settings')}
         >
-          ⚙️ 設定
+          設定
         </button>
       </nav>
 
@@ -145,7 +145,7 @@ const SettingsTab: React.FC = () => {
       </button>
 
       <div className="info-box">
-        <h4>📖 使用說明</h4>
+        <h4>使用說明</h4>
         <ol>
           <li>加入 Google Meet 課程</li>
           <li>點擊右側側邊欄開始錄音</li>

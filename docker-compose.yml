@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 資料庫
+  postgres:
+    image: postgres:15-alpine
+    container_name: courseai-postgres
+    environment:
+      POSTGRES_USER: courseai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-courseai_password}
+      POSTGRES_DB: courseai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U courseai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - courseai-network
+
+  # Redis 快取和任務隊列
+  redis:
+    image: redis:7-alpine
+    container_name: courseai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - courseai-network
+
+  # FastAPI 後端服務
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: courseai-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://courseai:${POSTGRES_PASSWORD:-courseai_password}@postgres:5432/courseai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+    networks:
+      - courseai-network
+
+  # Celery Worker (背景任務處理)
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: courseai-celery-worker
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://courseai:${POSTGRES_PASSWORD:-courseai_password}@postgres:5432/courseai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    command: celery -A app.celery_worker worker --loglevel=info
+    networks:
+      - courseai-network
+
+  # Flower (Celery 監控工具)
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: courseai-flower
+    env_file:
+      - ./backend/.env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery-worker
+    command: celery -A app.celery_worker flower --port=5555
+    networks:
+      - courseai-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  courseai-network:
+    driver: bridge

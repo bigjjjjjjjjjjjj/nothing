@@ -66,6 +66,29 @@ class ApiClient {
   }
 
   /**
+   * 結束課程
+   */
+  async endCourse(courseId: string): Promise<{ status: string; endedAt: string }> {
+    const response = await fetch(`${this.baseUrl}/courses/${courseId}/end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ended_at: new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to end course: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return {
+      status: result.status,
+      endedAt: result.ended_at,
+    };
+  }
+
+  /**
    * 上傳講義
    */
   async uploadSlides(

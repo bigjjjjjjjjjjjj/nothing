@@ -1,27 +1,32 @@
 """FastAPI 主應用"""
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import init_db, close_db
+from app.core.logging_config import setup_logging
 from app.api import courses, quizzes, transcripts, teacher_hints
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """應用生命週期管理"""
     # 啟動時執行
-    print("🚀 Starting CourseAI API Server...")
+    setup_logging()
+    logger.info("Starting CourseAI API Server...")
     await init_db()
-    print("✅ Database initialized")
+    logger.info("Database initialized")
 
     yield
 
     # 關閉時執行
-    print("🛑 Shutting down CourseAI API Server...")
+    logger.info("Shutting down CourseAI API Server...")
     await close_db()
-    print("✅ Database connections closed")
+    logger.info("Database connections closed")
 
 
 # 建立 FastAPI 應用
