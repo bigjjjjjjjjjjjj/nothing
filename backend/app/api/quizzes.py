@@ -7,6 +7,9 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.models.quiz import Quiz, QuizSubmission
+from app.models.course import Course
+from app.models.slide import Slide
+from app.models.transcript import Transcript
 from app.schemas.quiz import (
     QuizGenerateRequest,
     QuizGenerateResponse,
@@ -17,6 +20,7 @@ from app.schemas.quiz import (
     QuizResult,
     RecommendedReview,
 )
+from app.services.llm_service import llm_service, LLMServiceError
 
 router = APIRouter()
 
@@ -27,46 +31,76 @@ async def generate_quiz(
     db: AsyncSession = Depends(get_db)
 ):
     """生成題目"""
-    quiz_id = f"quiz_{uuid.uuid4().hex[:12]}"
+    # 驗證課程存在
+    course_result = await db.execute(
+        select(Course).where(Course.id == request.course_id)
+    )
+    course = course_result.scalar_one_or_none()
 
-    # TODO: 整合 LLM 服務生成題目
-    # 這裡需要呼叫 llm_service.generate_questions()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
 
-    # 暫時回傳示例數據
-    questions = [
-        {
-            "question_id": "q1",
-            "type": "multiple_choice",
-            "question_text": "以下何者是二元樹的特性？",
-            "options": [
-                "每個節點最多有兩個子節點",
-                "每個節點必須有兩個子節點",
-                "每個節點最多有一個子節點",
-                "節點數量必須是偶數",
-            ],
-            "correct_answer": "每個節點最多有兩個子節點",
-            "explanation": "二元樹的定義是每個節點最多有兩個子節點",
-            "slide_reference": 3,
-            "video_timestamp": "00:05:23",
-            "difficulty": "easy",
+    try:
+        # 取得講義內容
+        slides_result = await db.execute(
+            select(Slide).where(Slide.course_id == request.course_id)
+        )
+        slides = slides_result.scalars().all()
+        slides_text = "\n\n".join([slide.extracted_text for slide in slides if slide.extracted_text])
+
+        # 取得語音轉錄
+        transcript_result = await db.execute(
+            select(Transcript).where(Transcript.course_id == request.course_id).order_by(Transcript.timestamp)
+        )
+        transcripts = transcript_result.scalars().all()
+        transcript_text = "\n".join([f"[{t.timestamp}] {t.text}" for t in transcripts])
+
+        # 合併內容
+        content = f"{slides_text}\n\n{transcript_text}"
+
+        if not content.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="沒有可用的內容，請先上傳講義或進行轉錄"
+            )
+
+        # 轉換題型格式
+        question_types = {
+            'multiple_choice': request.question_types.multiple_choice,
+            'fill_in_blank': request.question_types.fill_in_blank,
+            'short_answer': request.question_types.short_answer,
         }
-    ]
 
-    quiz = Quiz(
-        id=quiz_id,
-        course_id=request.course_id,
-        scope_id=request.scope_id,
-        questions_json=questions,
-    )
+        # 使用 LLM 生成題目
+        questions_data = await llm_service.generate_questions(
+            content,
+            question_types,
+            request.difficulty
+        )
 
-    db.add(quiz)
-    await db.commit()
+        # 儲存題目
+        quiz_id = f"quiz_{uuid.uuid4().hex[:12]}"
+        quiz = Quiz(
+            id=quiz_id,
+            course_id=request.course_id,
+            scope_id=request.scope_id,
+            questions_json=questions_data,
+        )
 
-    return QuizGenerateResponse(
-        quiz_id=quiz_id,
-        questions=[Question(**q) for q in questions],
-        created_at=datetime.utcnow().isoformat(),
-    )
+        db.add(quiz)
+        await db.commit()
+        await db.refresh(quiz)
+
+        return QuizGenerateResponse(
+            quiz_id=quiz_id,
+            questions=[Question(**q) for q in questions_data],
+            created_at=datetime.utcnow().isoformat(),
+        )
+
+    except LLMServiceError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"題目生成失敗: {str(e)}")
 
 
 @router.post("/{quiz_id}/submit", response_model=QuizSubmitResponse)

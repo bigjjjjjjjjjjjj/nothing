@@ -137,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
           onClick={() => setIsOpen(true)}
           title="展開 CourseAI"
         >
-          📚
+          CourseAI
         </button>
       </div>
     );
@@ -146,7 +146,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
   return (
     <div className="courseai-sidebar open">
       <div className="courseai-header">
-        <h3>CourseAI 🎓</h3>
+        <h3>CourseAI</h3>
         <button
           className="courseai-close-btn"
           onClick={() => setIsOpen(false)}
@@ -159,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
       <div className="courseai-content">
         {/* 上傳講義 */}
         <section className="courseai-section">
-          <h4>📁 上傳講義</h4>
+          <h4>上傳講義</h4>
           <input
             type="file"
             accept=".pdf,.ppt,.pptx,.doc,.docx"
@@ -167,18 +167,18 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
             className="courseai-file-input"
           />
           {uploadedFile && (
-            <p className="courseai-file-name">✓ {uploadedFile.name}</p>
+            <p className="courseai-file-name">{uploadedFile.name}</p>
           )}
         </section>
 
         {/* 即時轉錄 */}
         <section className="courseai-section">
-          <h4>🎤 即時轉錄</h4>
+          <h4>即時轉錄</h4>
           <button
             className={`courseai-btn ${isRecording ? 'recording' : ''}`}
             onClick={toggleRecording}
           >
-            {isRecording ? '⏸ 暫停錄音' : '▶️ 開始錄音'}
+            {isRecording ? '暫停錄音' : '開始錄音'}
           </button>
 
           <div className="courseai-transcripts">
@@ -198,12 +198,12 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
         {/* 老師重點提示 */}
         {teacherHints.length > 0 && (
           <section className="courseai-section">
-            <h4>🎯 重點提示 ({teacherHints.length})</h4>
+            <h4>重點提示 ({teacherHints.length})</h4>
             <div className="courseai-hints">
               {teacherHints.map((hint) => (
                 <div key={hint.id} className="courseai-hint-item">
                   <span className="hint-icon">
-                    {hint.hintType === 'exam' ? '⭐' : '⚠️'}
+                    {hint.hintType === 'exam' ? '[重要]' : '[注意]'}
                   </span>
                   <span className="hint-time">[{hint.timestamp}]</span>
                   <p className="hint-text">{hint.hintText}</p>
@@ -215,7 +215,7 @@ const Sidebar: React.FC<SidebarProps> = ({ meetingId }) => {
 
         {/* 課後功能 */}
         <section className="courseai-section">
-          <h4>📝 課後功能</h4>
+          <h4>課後功能</h4>
           <button className="courseai-btn" onClick={generateSummary}>
             生成課程重點
           </button>

@@ -17,7 +17,9 @@ from app.schemas.course import (
 )
 from app.schemas.slide import SlideUploadResponse
 from app.schemas.quiz import QuizScopeResponse, QuizScope
-from app.services import course_service, slide_service, llm_service
+from app.services.slide_service import slide_service, SlideProcessingError
+from app.services.llm_service import llm_service, LLMServiceError
+from app.models.transcript import Transcript
 
 router = APIRouter()
 
@@ -91,33 +93,52 @@ async def upload_slides(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # 處理檔案上傳
-    file_id = f"file_{uuid.uuid4().hex[:12]}"
+    # 檢查檔案格式
+    if not slide_service.is_supported_file(file.filename):
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支援的檔案格式。支援格式: PDF, PPT, PPTX, DOC, DOCX"
+        )
 
-    # TODO: 實作檔案儲存和文字擷取
-    # 這裡需要整合 slide_service 來處理 PDF/PPT/Word
-    extracted_text = "Sample extracted text..."  # 暫時的示例文字
-    pages = 10  # 暫時的示例頁數
+    try:
+        # 讀取檔案內容
+        file_content = await file.read()
 
-    slide = Slide(
-        id=file_id,
-        course_id=course_id,
-        filename=file.filename,
-        file_path=f"uploads/{file_id}_{file.filename}",
-        total_pages=pages,
-        extracted_text=extracted_text,
-    )
+        # 處理檔案並擷取文字
+        processed_data = await slide_service.process_file(file_content, file.filename)
 
-    db.add(slide)
-    await db.commit()
+        # 儲存檔案到本地
+        file_id = f"file_{uuid.uuid4().hex[:12]}"
+        unique_filename = f"{file_id}_{file.filename}"
+        file_path = await slide_service.save_file(file_content, unique_filename)
 
-    return SlideUploadResponse(
-        file_id=file_id,
-        filename=file.filename,
-        pages=pages,
-        extracted_text_preview=extracted_text[:200],
-        status="processed",
-    )
+        # 儲存到資料庫
+        slide = Slide(
+            id=file_id,
+            course_id=course_id,
+            filename=file.filename,
+            file_path=file_path,
+            total_pages=processed_data['total_pages'],
+            extracted_text=processed_data['extracted_text'],
+        )
+
+        db.add(slide)
+        await db.commit()
+        await db.refresh(slide)
+
+        # 回傳結果
+        return SlideUploadResponse(
+            file_id=file_id,
+            filename=file.filename,
+            pages=processed_data['total_pages'],
+            extracted_text_preview=processed_data['extracted_text'][:200],
+            status="processed",
+        )
+
+    except SlideProcessingError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"檔案處理失敗: {str(e)}")
 
 
 @router.post("/{course_id}/analyze", response_model=CourseAnalyzeResponse)
@@ -136,27 +157,43 @@ async def analyze_course(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # TODO: 整合 LLM 服務進行分析
-    # 這裡需要呼叫 course_service.analyze_course()
+    try:
+        # 取得講義內容
+        slides_text = ""
+        if request.include_slides:
+            slides_result = await db.execute(
+                select(Slide).where(Slide.course_id == course_id)
+            )
+            slides = slides_result.scalars().all()
+            slides_text = "\n\n".join([slide.extracted_text for slide in slides if slide.extracted_text])
 
-    # 暫時回傳示例數據
-    summary = {
-        "key_points": [
-            {
-                "title": "二元樹定義",
-                "content": "每個節點最多有兩個子節點",
-                "slide_page": 3,
-                "transcript_timestamps": ["00:05:23"],
-            }
-        ],
-        "concepts": ["二元樹", "走訪"],
-        "formulas": ["T(n) = 2T(n/2) + O(1)"],
-    }
+        # 取得語音轉錄
+        transcript_text = ""
+        if request.include_transcript:
+            transcript_result = await db.execute(
+                select(Transcript).where(Transcript.course_id == course_id).order_by(Transcript.timestamp)
+            )
+            transcripts = transcript_result.scalars().all()
+            transcript_text = "\n".join([f"[{t.timestamp}] {t.text}" for t in transcripts])
 
-    return CourseAnalyzeResponse(
-        summary=summary,
-        status="completed",
-    )
+        if not slides_text and not transcript_text:
+            raise HTTPException(
+                status_code=400,
+                detail="沒有可分析的內容，請先上傳講義或進行轉錄"
+            )
+
+        # 使用 LLM 分析課程內容
+        summary = await llm_service.analyze_course_content(slides_text, transcript_text)
+
+        return CourseAnalyzeResponse(
+            summary=summary,
+            status="completed",
+        )
+
+    except LLMServiceError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"課程分析失敗: {str(e)}")
 
 
 @router.post("/{course_id}/suggest-quiz-scopes", response_model=QuizScopeResponse)
@@ -174,31 +211,40 @@ async def suggest_quiz_scopes(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # TODO: 整合 LLM 服務分析範圍
-    # 這裡需要呼叫 llm_service.suggest_scopes()
+    try:
+        # 取得講義內容
+        slides_result = await db.execute(
+            select(Slide).where(Slide.course_id == course_id)
+        )
+        slides = slides_result.scalars().all()
+        slides_text = "\n\n".join([slide.extracted_text for slide in slides if slide.extracted_text])
 
-    # 暫時回傳示例數據
-    suggested_scopes = [
-        QuizScope(
-            scope_id="scope_1",
-            label="整堂課程",
-            description="涵蓋本次課程所有內容",
-            estimated_questions=15,
-            coverage="all",
-        ),
-        QuizScope(
-            scope_id="scope_2",
-            label="3.1 二元樹的定義",
-            description="包含二元樹定義、性質、表示法",
-            slide_pages=[3, 4, 5],
-            transcript_timestamps=["00:05:23", "00:08:45"],
-            estimated_questions=8,
-            coverage="section",
-        ),
-    ]
+        # 取得語音轉錄
+        transcript_result = await db.execute(
+            select(Transcript).where(Transcript.course_id == course_id).order_by(Transcript.timestamp)
+        )
+        transcripts = transcript_result.scalars().all()
+        transcript_text = "\n".join([f"[{t.timestamp}] {t.text}" for t in transcripts])
 
-    return QuizScopeResponse(
-        suggested_scopes=suggested_scopes,
-        default_scope="scope_1",
-        recommendation="建議先複習「老師說會考的部分」",
-    )
+        if not slides_text and not transcript_text:
+            raise HTTPException(
+                status_code=400,
+                detail="沒有可分析的內容，請先上傳講義或進行轉錄"
+            )
+
+        # 使用 LLM 建議範圍
+        scopes_data = await llm_service.suggest_quiz_scopes(slides_text, transcript_text)
+
+        # 轉換為 QuizScope 物件
+        suggested_scopes = [QuizScope(**scope) for scope in scopes_data]
+
+        return QuizScopeResponse(
+            suggested_scopes=suggested_scopes,
+            default_scope=suggested_scopes[0].scopeId if suggested_scopes else "scope_1",
+            recommendation="建議先複習重點範圍",
+        )
+
+    except LLMServiceError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"範圍建議失敗: {str(e)}")

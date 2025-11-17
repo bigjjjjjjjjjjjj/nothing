@@ -12,16 +12,16 @@ from app.api import courses, quizzes, transcripts, teacher_hints
 async def lifespan(app: FastAPI):
     """應用生命週期管理"""
     # 啟動時執行
-    print("🚀 Starting CourseAI API Server...")
+    print("Starting CourseAI API Server...")
     await init_db()
-    print("✅ Database initialized")
+    print("Database initialized")
 
     yield
 
     # 關閉時執行
-    print("🛑 Shutting down CourseAI API Server...")
+    print("Shutting down CourseAI API Server...")
     await close_db()
-    print("✅ Database connections closed")
+    print("Database connections closed")
 
 
 # 建立 FastAPI 應用
