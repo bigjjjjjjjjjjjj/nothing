@@ -1,0 +1,47 @@
+# Docker 特定文件
+.dockerignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虛擬環境
+venv/
+env/
+ENV/
+
+# 開發和測試
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日誌和上傳
+logs/
+uploads/
+
+# 環境變數
+.env
+.env.local
+
+# 資料庫
+*.db
+*.sqlite3
+
+# 文件
+README.md
+docs/
+
+# Git
+.git/
+.gitignore
